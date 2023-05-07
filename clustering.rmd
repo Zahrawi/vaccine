@@ -1,0 +1,141 @@
+---
+title: "Time-series clustering of global vaccination coverage data"
+author: "Hasan Jamil"
+output: github_document
+always_allow_html: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+setwd("H://My Drive//Research//Vaccine")
+```
+
+
+Vaccination is one of the most effective public health interventions to prevent infectious diseases and reduce mortality and morbidity. However, there are still significant gaps and inequalities in vaccination coverage across countries and regions, which pose challenges for achieving global health goals and ensuring equity. Understanding the patterns and drivers of vaccination coverage among countries can help inform policy decisions and interventions to improve immunization programs and outcomes.
+
+In this project, we propose a data-driven approach to analyze global vaccination coverage data using time-series clustering techniques. Time-series clustering is a method of grouping time series data based on their similarity in shape, trend, or variability. By applying time-series clustering to vaccination coverage data, we aim to identify clusters of countries that have similar or dissimilar vaccination trends over time, and explore the characteristics and factors that explain the differences or similarities among the clusters.
+
+We will use the WHO vaccination data from 2021 as our main data source, which contains information on 15 vaccines for 194 countries.
+https://data.unicef.org/wp-content/uploads/2016/07/wuenic2021rev_web-update.xlsx
+
+
+| Vaccine | Explanation | Age of administration | Value for analysis |
+|---------|-------------|-----------------------|--------------------|
+| BCG     | Bacille Calmette-Guerin vaccine for tuberculosis (TB) disease | At birth or as soon as possible after birth | Can indicate the TB burden and the quality of maternal and child health services |
+| DTP1    | First dose of diphtheria, tetanus, and pertussis vaccine | At 6 weeks of age | Can indicate the timeliness of immunization initiation |
+| DTP3    | Third dose of diphtheria, tetanus, and pertussis vaccine | At 14 weeks of age | Can reflect the performance and equity of immunization programs |
+| HEPBB   | Hepatitis B vaccine at birth | Within 24 hours of birth | Can prevent perinatal transmission of hepatitis B virus and chronic infection |
+| HIB3    | Third dose of Haemophilus influenzae type b vaccine | At 14 weeks of age | Can indicate the impact of Hib vaccination on meningitis and pneumonia burden and mortality |
+| IPV1    | First dose of inactivated poliovirus vaccine | At 14 weeks of age | Can indicate the progress toward polio eradication and the switch from oral to inactivated polio vaccine |
+| MCV1    | First dose of measles-containing vaccine. Measles is a viral infection that can cause fever, rash, and complications such as pneumonia and encephalitis. | At 9 months of age | Can indicate the progress toward measles elimination |
+| MCV2    | Second dose of measles-containing vaccine. Measles is a viral infection that can cause fever, rash, and complications such as pneumonia and encephalitis. | At 15-18 months of age or at school entry (4-6 years) depending on the country's schedule | Can indicate the quality and sustainability of measles immunization programs |
+| PCV3    | Third dose of pneumococcal conjugate vaccine. Pneumococcal disease is caused by bacteria that can cause pneumonia, meningitis, sepsis, and otitis media. | At 14 weeks of age | Can indicate the impact of PCV vaccination on pneumococcal disease burden and mortality |
+| POL3    | Third dose of oral poliovirus vaccine. Polio is a viral infection that can cause paralysis and death. | At 14 weeks of age | Can indicate the progress toward polio eradication and the switch from oral to inactivated polio vaccine |
+| RCV1    | First dose of rubella-containing vaccine. Rubella is a viral infection that can cause fever, rash, and congenital rubella syndrome (CRS) in pregnant women and their babies. | At 9-9.5 months of age | Can indicate the progress toward rubella and CRS elimination |
+| ROTAC   | Rotavirus vaccine. Rotavirus is a viral infection that can cause severe diarrhea, dehydration, and death in children. | At 6 and 10 weeks of age | Can indicate the impact of rotavirus vaccination on diarrheal disease burden and mortality |
+| YFV     | Yellow fever vaccine. Yellow fever is a viral infection that can cause fever, jaundice, bleeding, organ failure, and death. It is transmitted by mosquitoes in tropical regions. | At 9 months of age or older for people living in or traveling to areas at risk for yellow fever transmission. A single dose provides lifelong protection for most people. Booster doses may be required for some travelers. | Can indicate the risk of yellow fever outbreaks and the need for preventive measures such as mosquito control and vaccination campaigns |
+
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(lubridate)
+library(plotly)
+```
+
+## Loading the data
+
+```{r}
+path <- "wuenic2021rev_web-update.xlsx"
+sheet_names <- excel_sheets("wuenic2021rev_web-update.xlsx")
+data_list <- list()
+for (i in seq_along(sheet_names)) {
+  data_list[[i]] <- read_excel(path, sheet = sheet_names[i])}
+agg_data <- data_list[[15]] 
+data_list <- data_list[1:14]
+data_combined <- do.call(rbind, data_list)
+```
+
+## Making the data in long formate tidy
+
+```{r}
+data_combined <- pivot_longer(data_combined, cols = c(5:ncol(data_combined)), names_to = "year", values_to = "coverage")
+data_combined$year <- as.Date(paste0(data_combined$year, "-01-01"))
+```
+
+
+## Discovering the global trend for each vaccine
+
+```{r}
+global_data <- agg_data %>%
+  filter(region == "Global")
+p <- ggplot(global_data, aes(x = year, y = coverage, color = vaccine)) +
+  geom_line() +
+  theme_bw()
+ggplotly(p)
+```
+
+
+
+## Plotting the top and bottom countries by median coverage
+
+```{r}
+n_countries <- 8
+median_coverage <- data_combined %>%
+  group_by(country) %>%
+  summarize(median_coverage = median(coverage, na.rm = TRUE)) %>%
+  arrange(desc(median_coverage))
+top_countries <- head(median_coverage$country, n_countries / 2)
+bottom_countries <- tail(median_coverage$country, n_countries / 2)
+selected_countries <- c(top_countries, bottom_countries)
+```
+
+# DTP3 coverage over time for the selected countries
+
+```{r}
+data_selected <- data_combined %>%
+  filter(country %in% selected_countries & vaccine == "DTP3")
+g <- ggplot(data_selected, aes(x = year, y = coverage, color = country)) +
+  geom_line() +
+  theme_bw()
+ggplotly(g)
+```
+
+# Plotting barchart for the vaccine coverage in 2021
+
+```{r}
+data_2021 <- data_combined %>%
+  filter(year == "2021-01-01")
+total_coverage <- data_2021 %>%
+  group_by(country) %>%
+  summarize(total_coverage = sum(coverage)) %>%
+  arrange(total_coverage)
+data_2021$country <- factor(data_2021$country, levels = total_coverage$country)
+
+g <- ggplot(data_2021, aes(x = country, y = coverage, fill = vaccine)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 2))
+ggplotly(g)
+```
+
+## Checking Countries with Conflict
+
+```{r}
+war_countries <- c("AFG", "IRQ", "SDN", "THA", "PAK", "MEX", "NGA", "SYR", "YEM")
+data_war_countries <- data_combined %>%
+  filter(iso3 %in% war_countries & vaccine == "DTP3")
+```
+
+
+## Plotting the coverage of DTP3 for these countries
+
+```{r}
+g <- ggplot(data_war_countries, aes(x = year, y = coverage, color = country)) +
+  geom_line() +
+  theme_bw()
+ggplotly(g)
+```
