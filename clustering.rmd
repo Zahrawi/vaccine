@@ -1,8 +1,7 @@
 ---
 title: "Time-series clustering of global vaccination coverage data"
 author: "Hasan Jamil"
-output: github_document
-always_allow_html: true
+output: html_document
 ---
 
 ```{r setup, include = FALSE}
@@ -136,6 +135,16 @@ data_war_countries <- data_combined %>%
 ```{r}
 g <- ggplot(data_war_countries, aes(x = year, y = coverage, color = country)) +
   geom_line() +
+  theme_bw()
+ggplotly(g)
+```
+
+## Plotting using facet
+
+```{r}
+g <- ggplot(data_war_countries, aes(x = year, y = coverage)) +
+  geom_line() +
+  facet_wrap(~country, ncol = 3) +
   theme_bw()
 ggplotly(g)
 ```
